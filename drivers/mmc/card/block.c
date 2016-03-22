@@ -383,7 +383,7 @@ static int mmc_blk_ioctl_cmd(struct block_device *bdev,
 	struct mmc_request mrq = {0};
 	struct scatterlist *sg = 0;
 	int err = 0;
-	struct mmc_host *host;	
+	struct mmc_host *host;
 
 	/*
 	 * The caller must have CAP_SYS_RAWIO, and must be calling this on the
@@ -420,49 +420,6 @@ static int mmc_blk_ioctl_cmd(struct block_device *bdev,
 		}
 		goto cmd_done;
 	}
-
-	cmd.opcode = idata->ic.opcode;
-	cmd.arg = idata->ic.arg;
-	cmd.flags = idata->ic.flags;
-
-	if (idata->buf_bytes) {
-		int len;
-		data.blksz = idata->ic.blksz;
-		data.blocks = idata->ic.blocks;
-
-		sg = mmc_blk_get_sg(card, idata->buf, &len, idata->buf_bytes);
-		data.sg = sg;
-		data.sg_len = len;
-
-		if (idata->ic.write_flag)
-			data.flags = MMC_DATA_WRITE;
-		else
-			data.flags = MMC_DATA_READ;
-
-		/* data.flags must already be set before doing this. */
-		mmc_set_data_timeout(&data, card);
-
-		/* Allow overriding the timeout_ns for empirical tuning. */
-		if (idata->ic.data_timeout_ns)
-			data.timeout_ns = idata->ic.data_timeout_ns;
-
-		if ((cmd.flags & MMC_RSP_R1B) == MMC_RSP_R1B) {
-			/*
-			 * Pretend this is a data transfer and rely on the
-			 * host driver to compute timeout.  When all host
-			 * drivers support cmd.cmd_timeout for R1B, this
-			 * can be changed to:
-			 *
-			 *     mrq.data = NULL;
-			 *     cmd.cmd_timeout = idata->ic.cmd_timeout_ms;
-			 */
-			data.timeout_ns = idata->ic.cmd_timeout_ms * 1000000;
-		}
-
-		mrq.data = &data;
-	}
-
-	mrq.cmd = &cmd;
 
 	mmc_claim_host(card->host);
 
@@ -2125,7 +2082,7 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 	int ret;
 	struct mmc_blk_data *md = mq->data;
 	struct mmc_card *card = md->queue.card;
-	struct mmc_host *host = card->host;	
+	struct mmc_host *host = card->host;
 
 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
 	if (mmc_bus_needs_resume(card->host)) {
@@ -2474,7 +2431,7 @@ static const struct mmc_fixup blk_fixups[] =
 	MMC_FIXUP("VZL00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
 		  MMC_QUIRK_MOVINAND_SECURE),
 
-	/* Some TLC movinand cards needs Sync operation for performance*/ 
+	/* Some TLC movinand cards needs Sync operation for performance*/
 	MMC_FIXUP("S5U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,
 			MMC_QUIRK_MOVINAND_TLC),
 	MMC_FIXUP("J5U00M", CID_MANFID_SAMSUNG, CID_OEMID_ANY, add_quirk_mmc,

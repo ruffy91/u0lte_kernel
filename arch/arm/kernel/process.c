@@ -240,7 +240,7 @@ void cpu_idle(void)
 
 			local_irq_disable();
 #ifdef CONFIG_PL310_ERRATA_769419
-			wmb();
+  		wmb();
 #endif
 
 			if (hlt_counter) {

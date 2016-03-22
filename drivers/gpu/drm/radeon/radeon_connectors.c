@@ -64,14 +64,33 @@ void radeon_connector_hotplug(struct drm_connector *connector)
 
 	/* just deal with DP (not eDP) here. */
 	if (connector->connector_type == DRM_MODE_CONNECTOR_DisplayPort) {
-		int saved_dpms = connector->dpms;
+		struct radeon_connector_atom_dig *dig_connector =
+			radeon_connector->con_priv;
 
-		/* Only turn off the display it it's physically disconnected */
-		if (!radeon_hpd_sense(rdev, radeon_connector->hpd.hpd))
-			drm_helper_connector_dpms(connector, DRM_MODE_DPMS_OFF);
-		else if (radeon_dp_needs_link_train(radeon_connector))
-			drm_helper_connector_dpms(connector, DRM_MODE_DPMS_ON);
-		connector->dpms = saved_dpms;
+		/* if existing sink type was not DP no need to retrain */
+		if (dig_connector->dp_sink_type != CONNECTOR_OBJECT_ID_DISPLAYPORT)
+			return;
+
+		/* first get sink type as it may be reset after (un)plug */
+		dig_connector->dp_sink_type = radeon_dp_getsinktype(radeon_connector);
+		/* don't do anything if sink is not display port, i.e.,
+		 * passive dp->(dvi|hdmi) adaptor
+		 */
+		if (dig_connector->dp_sink_type == CONNECTOR_OBJECT_ID_DISPLAYPORT) {
+			int saved_dpms = connector->dpms;
+			/* Only turn off the display if it's physically disconnected */
+			if (!radeon_hpd_sense(rdev, radeon_connector->hpd.hpd)) {
+				drm_helper_connector_dpms(connector, DRM_MODE_DPMS_OFF);
+			} else if (radeon_dp_needs_link_train(radeon_connector)) {
+				/* set it to OFF so that drm_helper_connector_dpms()
+				 * won't return immediately since the current state
+				 * is ON at this point.
+				 */
+				connector->dpms = DRM_MODE_DPMS_OFF;
+				drm_helper_connector_dpms(connector, DRM_MODE_DPMS_ON);
+			}
+			connector->dpms = saved_dpms;
+		}
 	}
 }
 
@@ -428,6 +447,55 @@ int radeon_connector_set_property(struct drm_connector *connector, struct drm_pr
 	}
 
 	return 0;
+}
+
+/*
+ * Some integrated ATI Radeon chipset implementations (e. g.
+ * Asus M2A-VM HDMI) may indicate the availability of a DDC,
+ * even when there's no monitor connected. For these connectors
+ * following DDC probe extension will be applied: check also for the
+ * availability of EDID with at least a correct EDID header. Only then,
+ * DDC is assumed to be available. This prevents drm_get_edid() and
+ * drm_edid_block_valid() from periodically dumping data and kernel
+ * errors into the logs and onto the terminal.
+ */
+static bool radeon_connector_needs_extended_probe(struct radeon_device *dev,
+				     uint32_t supported_device,
+				     int connector_type)
+{
+	/* Asus M2A-VM HDMI board sends data to i2c bus even,
+	 * if HDMI add-on card is not plugged in or HDMI is disabled in
+	 * BIOS. Valid DDC can only be assumed, if also a valid EDID header
+	 * can be retrieved via i2c bus during DDC probe */
+	if ((dev->pdev->device == 0x791e) &&
+	    (dev->pdev->subsystem_vendor == 0x1043) &&
+	    (dev->pdev->subsystem_device == 0x826d)) {
+		if ((connector_type == DRM_MODE_CONNECTOR_HDMIA) &&
+		    (supported_device == ATOM_DEVICE_DFP2_SUPPORT))
+			return true;
+	}
+	/* ECS A740GM-M with ATI RADEON 2100 sends data to i2c bus
+	 * for a DVI connector that is not implemented */
+	if ((dev->pdev->device == 0x796e) &&
+	    (dev->pdev->subsystem_vendor == 0x1019) &&
+	    (dev->pdev->subsystem_device == 0x2615)) {
+		if ((connector_type == DRM_MODE_CONNECTOR_DVID) &&
+		    (supported_device == ATOM_DEVICE_DFP2_SUPPORT))
+			return true;
+	}
+	/* TOSHIBA Satellite L300D with ATI Mobility Radeon x1100
+	 * (RS690M) sends data to i2c bus for a HDMI connector that
+	 * is not implemented */
+	if ((dev->pdev->device == 0x791f) &&
+	    (dev->pdev->subsystem_vendor == 0x1179) &&
+	    (dev->pdev->subsystem_device == 0xff68)) {
+		if ((connector_type == DRM_MODE_CONNECTOR_HDMIA) &&
+		    (supported_device == ATOM_DEVICE_DFP2_SUPPORT))
+			return true;
+	}
+
+	/* Default: no EDID header probe required for DDC probing */
+	return false;
 }
 
 static void radeon_fixup_lvds_native_mode(struct drm_encoder *encoder,
@@ -1334,7 +1402,8 @@ radeon_dp_detect(struct drm_connector *connector, bool force)
 				if (radeon_dp_getdpcd(radeon_connector))
 					ret = connector_status_connected;
 			} else {
-				if (radeon_ddc_probe(radeon_connector))
+				if (radeon_ddc_probe(radeon_connector,
+						     radeon_connector->requires_extended_probe))
 					ret = connector_status_connected;
 			}
 		}

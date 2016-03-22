@@ -603,7 +603,18 @@ intel_dp_i2c_aux_ch(struct i2c_adapter *adapter, int mode,
 			DRM_DEBUG_KMS("aux_ch native nack\n");
 			return -EREMOTEIO;
 		case AUX_NATIVE_REPLY_DEFER:
-			udelay(100);
+			/*
+			 * For now, just give more slack to branch devices. We
+			 * could check the DPCD for I2C bit rate capabilities,
+			 * and if available, adjust the interval. We could also
+			 * be more careful with DP-to-Legacy adapters where a
+			 * long legacy cable may force very low I2C bit rates.
+			 */
+			if (intel_dp->dpcd[DP_DOWNSTREAMPORT_PRESENT] &
+			    DP_DWN_STRM_PORT_PRESENT)
+				usleep_range(500, 600);
+			else
+				usleep_range(300, 400);
 			continue;
 		default:
 			DRM_ERROR("aux_ch invalid native reply 0x%02x\n",
@@ -2082,6 +2093,31 @@ intel_dp_get_edid_modes(struct drm_connector *connector, struct i2c_adapter *ada
 	ironlake_edp_panel_vdd_on(intel_dp);
 	ret = intel_ddc_get_modes(connector, adapter);
 	ironlake_edp_panel_vdd_off(intel_dp, false);
+	return ret;
+}
+
+
+static struct edid *
+intel_dp_get_edid(struct drm_connector *connector, struct i2c_adapter *adapter)
+{
+	struct intel_dp *intel_dp = intel_attached_dp(connector);
+	struct edid	*edid;
+
+	ironlake_edp_panel_vdd_on(intel_dp);
+	edid = drm_get_edid(connector, adapter);
+	ironlake_edp_panel_vdd_off(intel_dp);
+	return edid;
+}
+
+static int
+intel_dp_get_edid_modes(struct drm_connector *connector, struct i2c_adapter *adapter)
+{
+	struct intel_dp *intel_dp = intel_attached_dp(connector);
+	int	ret;
+
+	ironlake_edp_panel_vdd_on(intel_dp);
+	ret = intel_ddc_get_modes(connector, adapter);
+	ironlake_edp_panel_vdd_off(intel_dp);
 	return ret;
 }
 
