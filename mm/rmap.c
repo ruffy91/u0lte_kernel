@@ -57,6 +57,7 @@
 #include <linux/mmu_notifier.h>
 #include <linux/migrate.h>
 #include <linux/hugetlb.h>
+#include <linux/backing-dev.h>
 
 #include <asm/tlbflush.h>
 
@@ -936,11 +937,8 @@ int page_mkclean(struct page *page)
 
 	if (page_mapped(page)) {
 		struct address_space *mapping = page_mapping(page);
-		if (mapping) {
+		if (mapping)
 			ret = page_mkclean_file(mapping, page);
-			if (page_test_and_clear_dirty(page_to_pfn(page), 1))
-				ret = 1;
-		}
 	}
 
 	return ret;
@@ -1121,6 +1119,8 @@ void page_add_file_rmap(struct page *page)
  */
 void page_remove_rmap(struct page *page)
 {
+	struct address_space *mapping = page_mapping(page);
+
 	/* page still mapped by someone else? */
 	if (!atomic_add_negative(-1, &page->_mapcount))
 		return;
@@ -1131,8 +1131,19 @@ void page_remove_rmap(struct page *page)
 	 * this if the page is anon, so about to be freed; but perhaps
 	 * not if it's in swapcache - there might be another pte slot
 	 * containing the swap entry, but page not yet written to swap.
+	 *
+	 * And we can skip it on file pages, so long as the filesystem
+	 * participates in dirty tracking; but need to catch shm and tmpfs
+	 * and ramfs pages which have been modified since creation by read
+	 * fault.
+	 *
+	 * Note that mapping must be decided above, before decrementing
+	 * mapcount (which luckily provides a barrier): once page is unmapped,
+	 * it could be truncated and page->mapping reset to NULL at any moment.
+	 * Note also that we are relying on page_mapping(page) to set mapping
+	 * to &swapper_space when PageSwapCache(page).
 	 */
-	if ((!PageAnon(page) || PageSwapCache(page)) &&
+	if (mapping && !mapping_cap_account_dirty(mapping) &&
 	    page_test_and_clear_dirty(page_to_pfn(page), 1))
 		set_page_dirty(page);
 	/*
@@ -1212,17 +1223,9 @@ int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 
 	if (PageHWPoison(page) && !(flags & TTU_IGNORE_HWPOISON)) {
 		if (PageAnon(page))
-		#ifdef CONFIG_LOWMEM_CHECK
-			dec_mm_counter(mm, MM_ANONPAGES, page);
-		#else
 			dec_mm_counter(mm, MM_ANONPAGES);
-		#endif
 		else
-		#ifdef CONFIG_LOWMEM_CHECK
-			dec_mm_counter(mm, MM_FILEPAGES, page);
-		#else
 			dec_mm_counter(mm, MM_FILEPAGES);
-		#endif
 		set_pte_at(mm, address, pte,
 				swp_entry_to_pte(make_hwpoison_entry(page)));
 	} else if (PageAnon(page)) {
@@ -1244,13 +1247,8 @@ int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 					list_add(&mm->mmlist, &init_mm.mmlist);
 				spin_unlock(&mmlist_lock);
 			}
-		#ifdef CONFIG_LOWMEM_CHECK
-			dec_mm_counter(mm, MM_ANONPAGES, page);
-			inc_mm_counter(mm, MM_SWAPENTS, page);
-		#else
 			dec_mm_counter(mm, MM_ANONPAGES);
 			inc_mm_counter(mm, MM_SWAPENTS);
-		#endif
 		} else if (PAGE_MIGRATION) {
 			/*
 			 * Store the pfn of the page in a special migration
@@ -1268,11 +1266,7 @@ int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 		entry = make_migration_entry(page, pte_write(pteval));
 		set_pte_at(mm, address, pte, swp_entry_to_pte(entry));
 	} else
-	#ifdef CONFIG_LOWMEM_CHECK
-		dec_mm_counter(mm, MM_FILEPAGES, page);
-	#else
 		dec_mm_counter(mm, MM_FILEPAGES);
-	#endif
 
 	page_remove_rmap(page);
 	page_cache_release(page);
@@ -1411,11 +1405,7 @@ static int try_to_unmap_cluster(unsigned long cursor, unsigned int *mapcount,
 
 		page_remove_rmap(page);
 		page_cache_release(page);
-	#ifdef CONFIG_LOWMEM_CHECK
-		dec_mm_counter(mm, MM_FILEPAGES, page);
-	#else
 		dec_mm_counter(mm, MM_FILEPAGES);
-	#endif
 		(*mapcount)--;
 	}
 	pte_unmap_unlock(pte - 1, ptl);

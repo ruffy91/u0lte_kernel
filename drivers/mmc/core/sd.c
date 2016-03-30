@@ -306,7 +306,7 @@ static int mmc_read_switch(struct mmc_card *card)
 		goto out;
 	}
 
-	if (status[13] & 0x02)
+	if (status[13] & UHS_SDR50_BUS_SPEED)
 		card->sw_caps.hs_max_dtr = 50000000;
 
 	if (card->scr.sda_spec3) {
@@ -819,7 +819,7 @@ int mmc_sd_setup_card(struct mmc_host *host, struct mmc_card *card,
 			if (!err) {
 				if (retries > 1) {
 					printk(KERN_WARNING
-					       "%s: recovered\n", 
+					       "%s: recovered\n",
 					       mmc_hostname(host));
 				}
 				break;
@@ -1052,7 +1052,7 @@ static void mmc_sd_detect(struct mmc_host *host)
 
 	BUG_ON(!host);
 	BUG_ON(!host->card);
-       
+
 	mmc_claim_host(host);
 
 	/*
@@ -1309,4 +1309,3 @@ ret_err:
 
 	return err;
 }
-
