@@ -689,7 +689,13 @@ static void sync_print_pt(struct seq_file *s, struct sync_pt *pt, bool fence)
 		struct timeval tv = ktime_to_timeval(pt->timestamp);
 		seq_printf(s, "@%ld.%06ld", tv.tv_sec, tv.tv_usec);
 	}
-
+#ifdef CONFIG_MACH_GC2PD
+	if (!pt->parent->ops) {
+		pr_err("%s: pt->parent->ops is NULL\n", __func__);
+		seq_printf(s, "\n");
+		return;
+	}
+#endif
 	if (pt->parent->ops->print_pt) {
 		seq_printf(s, ": ");
 		pt->parent->ops->print_pt(s, pt);

@@ -2249,6 +2249,7 @@ static int attach_task_by_pid(struct cgroup *cgrp, u64 pid, bool threadgroup)
 			return -ESRCH;
 		}
 
+#ifndef CONFIG_ZRAM_FOR_ANDROID
 		/*
 		 * even if we're attaching all tasks in the thread group, we
 		 * only need to check permissions on one of them.
@@ -2268,6 +2269,7 @@ static int attach_task_by_pid(struct cgroup *cgrp, u64 pid, bool threadgroup)
 				return ret;
 			}
 		}
+#endif /* CONFIG_ZRAM_FOR_ANDROID */
 		get_task_struct(tsk);
 		rcu_read_unlock();
 	} else {
