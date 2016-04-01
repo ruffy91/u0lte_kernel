@@ -358,10 +358,6 @@ static int serial_write(struct tty_struct *tty, const unsigned char *buf,
 
 	if (port->serial->dev->state == USB_STATE_NOTATTACHED)
 		goto exit;
-#ifdef CONFIG_MACH_M0
-	printk(KERN_INFO "%s - port %d, %d byte(s)",
-			__func__, port->number, count);
-#endif
 	/* pass on to the driver specific version of this function */
 	retval = port->serial->type->write(tty, port, buf, count);
 
@@ -695,7 +691,7 @@ static int serial_carrier_raised(struct tty_port *port)
 	if (drv->carrier_raised)
 		return drv->carrier_raised(p);
 	/* No carrier control - don't block */
-	return 1;	
+	return 1;
 }
 
 static void serial_dtr_rts(struct tty_port *port, int on)
@@ -1165,11 +1161,6 @@ void usb_serial_disconnect(struct usb_interface *interface)
 	/* let the last holder of this object cause it to be cleaned up */
 	usb_serial_put(serial);
 	dev_info(dev, "device disconnected\n");
-	msleep(300);
-	for(i = 0; serial_table[i]; i++) {
-		dev_info(dev, "device disconnected, %d, i : %d\n", __LINE__, i);
-		destroy_serial(&serial->kref);
-	}
 }
 EXPORT_SYMBOL_GPL(usb_serial_disconnect);
 
