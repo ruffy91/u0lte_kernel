@@ -177,6 +177,7 @@ unsigned long get_mm_counter(struct mm_struct *mm, int member)
 		return 0;
 	return (unsigned long)val;
 }
+EXPORT_SYMBOL(get_mm_counter);
 
 void sync_mm_rss(struct task_struct *task, struct mm_struct *mm)
 {
@@ -1658,7 +1659,7 @@ int __get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 
 	VM_BUG_ON(!!pages != !!(gup_flags & FOLL_GET));
 
-	/* 
+	/*
 	 * Require read or write permissions.
 	 * If FOLL_FORCE is set, we only require the "MAY" flags.
 	 */

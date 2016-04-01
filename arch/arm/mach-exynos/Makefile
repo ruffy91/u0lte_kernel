@@ -394,7 +394,7 @@ obj-$(CONFIG_EXYNOS5_DEV_BTS)		+= bts.o
 
 obj-$(CONFIG_WAKEUP_ASSIST)		+= wakeup_assist.o
 obj-$(CONFIG_BT_CSR8811)		+= board-bluetooth-csr8811.o
-obj-$(CONFIG_ION_EXYNOS)		+= dev-ion.o
+obj-$(CONFIG_ION_EXYNOS)               += dev-ion.o
 
 obj-$(CONFIG_BT_BCM4330)		+= board-bluetooth-bcm4330.o
 obj-$(CONFIG_BT_BCM4334)		+= board-bluetooth-bcm4334.o

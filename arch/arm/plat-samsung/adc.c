@@ -163,7 +163,6 @@ int s3c_adc_start(struct s3c_adc_client *client,
 
 	BUG_ON(!adc);
 
-
 	if (atomic_xchg(&client->running, 1)) {
 		WARN(1, "%s: %p is already running\n", __func__, client);
 		return -EAGAIN;
